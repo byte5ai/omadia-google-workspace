@@ -1,0 +1,352 @@
+schema_version: "1"
+
+# ===========================================================================
+# @omadia/integration-google-workspace — Google Workspace
+# ---------------------------------------------------------------------------
+# Conforms to the omadia plugin manifest v1 schema.
+# A kind:integration plugin. It publishes a shared Google Workspace client
+# ('googleworkspace.client') + a short-TTL read cache ('googleworkspace.cache')
+# via the service registry, and contributes read-only tools across Calendar,
+# Gmail, Drive/Docs/Sheets and the Directory/People surfaces (plus opt-in
+# writes). Auth is a Google Cloud service account with domain-wide delegation
+# (JWT-bearer, server-to-server) — every call impersonates a Workspace user.
+# ===========================================================================
+
+identity:
+  id: "@omadia/integration-google-workspace"   # === package.json "name"
+  kind: "integration"
+  domain: "googleworkspace"
+  name: "Google Workspace"
+  version: "0.1.0"                              # === package.json "version"
+  description: "Google Workspace connector for omadia. Service-account (domain-wide-delegation) JWT-bearer client (read-mostly). Publishes the 'googleworkspace.client' + 'googleworkspace.cache' services and contributes read-only tools for Calendar, Gmail, Drive/Docs/Sheets and Directory/People — plus opt-in calendar/gmail writes."
+  authors:
+    - name: "byte5 GmbH"
+      email: "info@omadia.ai"
+      url: "https://omadia.ai"
+  license: "MIT"
+  homepage: "https://github.com/byte5ai/omadia-google-workspace"
+  icon: "./assets/icon.svg"
+  categories:
+    - "integration"
+    - "communication"
+    - "productivity"
+
+compat:
+  core: ">=1.0 <2.0"
+  node: ">=20"
+
+depends_on: []
+
+lifecycle:
+  entry: "dist/index.js"                        # exports `activate(ctx)` → GoogleWorkspacePluginHandle
+  uninstall_policy:
+    entities: "delete"
+    memory: "delete"
+    secrets: "delete"                           # drops the stored private key
+
+# Builder service-type auto-discovery — registers `googleworkspace.client` into
+# the agent-builder's serviceTypeRegistry on activation so a builder-generated
+# agent can `external_reads` against the client without a middleware restart.
+service_types:
+  - service: "googleworkspace.client"
+    type:
+      from: "@omadia/integration-google-workspace"
+      name: "GoogleWorkspaceClient"
+
+# ---------------------------------------------------------------------------
+# Setup. The service-account private key IS a credential → vault (type: secret,
+# read via ctx.secrets). The client email + subjects are plain config
+# (ctx.config.get).
+# ---------------------------------------------------------------------------
+setup:
+  guide:
+    en: |
+      ## Connect Google Workspace
+
+      This integration talks to the Google Workspace APIs (Calendar, Gmail,
+      Drive/Docs/Sheets, Admin Directory, People) using a **Google Cloud service
+      account with domain-wide delegation** — server-to-server, no interactive
+      sign-in. Every request impersonates a Workspace user. About 15 minutes,
+      and you need a Workspace **super-admin** to authorise the delegation.
+
+      ### 1. Create a service account + key (Google Cloud Console)
+      1. [console.cloud.google.com](https://console.cloud.google.com) → pick or
+         create a project → **APIs & Services → Enable APIs & Services** and
+         enable: **Google Calendar API**, **Gmail API**, **Google Drive API**,
+         **Google Docs API**, **Google Sheets API**, **Admin SDK API**,
+         **People API** (enable only the ones you'll use).
+      2. **IAM & Admin → Service Accounts → Create service account**. Name it
+         (e.g. "omadia") → **Done**.
+      3. Open the service account → **Keys → Add key → Create new key → JSON**.
+         A `.json` file downloads. From it you need two values:
+         `client_email` → field **Service-account email**, and `private_key`
+         (the long `-----BEGIN PRIVATE KEY----- …` block) → field
+         **Service-account private key**.
+      4. On the service account's **Details** page note the **Unique ID**
+         (a long number) — that is the *Client ID* used in step 2.
+
+      ### 2. Authorise domain-wide delegation (Workspace Admin console)
+      1. [admin.google.com](https://admin.google.com) → **Security → Access and
+         data control → API controls → Domain-wide delegation → Manage
+         domain-wide delegation → Add new**.
+      2. **Client ID** = the service account's Unique ID (step 1.4).
+      3. **OAuth scopes** = the comma-separated scope list. After install, the
+         plugin logs the exact scopes it will request
+         (`delegated scopes (authorise these…)`); paste those. The defaults are:
+         ```
+         https://www.googleapis.com/auth/calendar.readonly,
+         https://www.googleapis.com/auth/gmail.readonly,
+         https://www.googleapis.com/auth/drive.readonly,
+         https://www.googleapis.com/auth/documents.readonly,
+         https://www.googleapis.com/auth/spreadsheets.readonly,
+         https://www.googleapis.com/auth/admin.directory.user.readonly,
+         https://www.googleapis.com/auth/contacts.readonly,
+         https://www.googleapis.com/auth/directory.readonly
+         ```
+         With **Enable writes** on, also authorise
+         `https://www.googleapis.com/auth/calendar.events`,
+         `https://www.googleapis.com/auth/gmail.send` and
+         `https://www.googleapis.com/auth/gmail.compose`.
+      4. **Authorise**. Delegation can take a few minutes to propagate.
+
+      ### 3. Fill in the fields below
+      | Field | Value |
+      |---|---|
+      | **Service-account email** | `client_email` from the JSON key |
+      | **Service-account private key** | `private_key` from the JSON key (paste the whole PEM block) |
+      | **Default user** | The Workspace user the integration acts as by default (e.g. an assistant mailbox) |
+      | **Admin user** | A super-admin's email — used for directory lookups (optional; falls back to the default user) |
+      | **Surfaces** | Which areas to enable (optional; default all) |
+      | **Enable writes** | Off = read-only; on = also calendar/gmail writes |
+
+      Install — connectivity is verified in the background by minting a token
+      for the default user (watch the plugin logs for `connected` or a
+      `token probe failed` warning).
+
+      ### Troubleshooting
+      - **`unauthorized_client` / 401 at the token step** — the Client ID or a
+        scope is not authorised in step 2 (every scope the plugin requests must
+        be listed verbatim), or delegation has not propagated yet.
+      - **403 on a surface** — that API is not enabled in the Cloud project
+        (step 1.1), or the impersonated user lacks access.
+      - **`invalid_grant`** — the **Default user** / **Admin user** email does
+        not exist in the Workspace domain, or the private key is malformed
+        (paste the entire PEM, including the BEGIN/END lines).
+      - **Directory returns 403** — directory reads impersonate the **Admin
+        user**; it must be a real admin and `admin.directory.user.readonly`
+        must be authorised.
+
+      > Least privilege: enable only the surfaces you need and leave **Enable
+      > writes** off unless the assistant should create events or send mail.
+    de: |
+      ## Google Workspace verbinden
+
+      Diese Integration spricht die Google-Workspace-APIs (Kalender, Gmail,
+      Drive/Docs/Sheets, Admin-Directory, People) über ein **Google-Cloud-
+      Dienstkonto mit domänenweiter Delegierung** an — Server-zu-Server, ohne
+      interaktive Anmeldung. Jede Anfrage agiert im Namen eines Workspace-
+      Nutzers. Ca. 15 Minuten; für die Delegierung wird ein Workspace-
+      **Super-Admin** benötigt.
+
+      ### 1. Dienstkonto + Schlüssel anlegen (Google Cloud Console)
+      1. [console.cloud.google.com](https://console.cloud.google.com) → Projekt
+         wählen/erstellen → **APIs & Dienste → APIs aktivieren** und aktivieren:
+         **Google Calendar API**, **Gmail API**, **Google Drive API**,
+         **Google Docs API**, **Google Sheets API**, **Admin SDK API**,
+         **People API** (nur die benötigten).
+      2. **IAM & Verwaltung → Dienstkonten → Dienstkonto erstellen**. Benennen
+         (z.B. „omadia") → **Fertig**.
+      3. Dienstkonto öffnen → **Schlüssel → Schlüssel hinzufügen → Neuen
+         Schlüssel erstellen → JSON**. Eine `.json`-Datei wird geladen. Daraus
+         brauchst du zwei Werte: `client_email` → Feld **Dienstkonto-E-Mail**
+         und `private_key` (der lange `-----BEGIN PRIVATE KEY----- …`-Block) →
+         Feld **Dienstkonto-Private-Key**.
+      4. Auf der **Details**-Seite des Dienstkontos die **Eindeutige ID** (lange
+         Zahl) notieren — das ist die *Client-ID* für Schritt 2.
+
+      ### 2. Domänenweite Delegierung autorisieren (Workspace Admin-Konsole)
+      1. [admin.google.com](https://admin.google.com) → **Sicherheit → Zugriffs-
+         und Datenkontrolle → API-Steuerung → Domänenweite Delegierung →
+         Verwalten → Neu hinzufügen**.
+      2. **Client-ID** = die eindeutige ID des Dienstkontos (Schritt 1.4).
+      3. **OAuth-Bereiche** = die kommaseparierte Scope-Liste. Nach der
+         Installation protokolliert das Plugin die exakt angeforderten Scopes
+         (`delegated scopes (authorise these…)`); diese einfügen. Standard:
+         ```
+         https://www.googleapis.com/auth/calendar.readonly,
+         https://www.googleapis.com/auth/gmail.readonly,
+         https://www.googleapis.com/auth/drive.readonly,
+         https://www.googleapis.com/auth/documents.readonly,
+         https://www.googleapis.com/auth/spreadsheets.readonly,
+         https://www.googleapis.com/auth/admin.directory.user.readonly,
+         https://www.googleapis.com/auth/contacts.readonly,
+         https://www.googleapis.com/auth/directory.readonly
+         ```
+         Mit **Schreiben aktivieren** zusätzlich
+         `https://www.googleapis.com/auth/calendar.events`,
+         `https://www.googleapis.com/auth/gmail.send` und
+         `https://www.googleapis.com/auth/gmail.compose` autorisieren.
+      4. **Autorisieren**. Die Delegierung braucht ggf. einige Minuten.
+
+      ### 3. Felder unten ausfüllen
+      | Feld | Wert |
+      |---|---|
+      | **Dienstkonto-E-Mail** | `client_email` aus dem JSON-Schlüssel |
+      | **Dienstkonto-Private-Key** | `private_key` aus dem JSON-Schlüssel (kompletten PEM-Block einfügen) |
+      | **Standard-Nutzer** | Workspace-Nutzer, in dessen Namen standardmäßig agiert wird (z.B. ein Assistenz-Postfach) |
+      | **Admin-Nutzer** | E-Mail eines Super-Admins — für Directory-Abfragen (optional; fällt auf Standard-Nutzer zurück) |
+      | **Bereiche** | Welche Bereiche aktiv sind (optional; Standard alle) |
+      | **Schreiben aktivieren** | Aus = nur lesen; an = auch Kalender/Gmail-Schreiben |
+
+      Installieren — die Verbindung wird im Hintergrund geprüft, indem ein Token
+      für den Standard-Nutzer erzeugt wird (in den Logs erscheint `connected`
+      bzw. eine `token probe failed`-Warnung).
+
+      ### Fehlersuche
+      - **`unauthorized_client` / 401 beim Token** — Client-ID oder ein Scope
+        ist in Schritt 2 nicht autorisiert (jeder angeforderte Scope muss
+        wortgleich gelistet sein), oder die Delegierung ist noch nicht aktiv.
+      - **403 bei einem Bereich** — die API ist im Cloud-Projekt nicht aktiviert
+        (Schritt 1.1), oder der imitierte Nutzer hat keinen Zugriff.
+      - **`invalid_grant`** — die **Standard-Nutzer**-/**Admin-Nutzer**-E-Mail
+        existiert nicht in der Domäne, oder der Private-Key ist fehlerhaft
+        (kompletten PEM inkl. BEGIN/END einfügen).
+      - **Directory liefert 403** — Directory-Abfragen imitieren den
+        **Admin-Nutzer**; dieser muss Admin sein und
+        `admin.directory.user.readonly` muss autorisiert sein.
+
+      > Least Privilege: nur die benötigten Bereiche aktivieren und **Schreiben
+      > aktivieren** nur einschalten, wenn der Assistent Termine anlegen oder
+      > Mails senden soll.
+  fields:
+    - key: "gw_sa_client_email"
+      type: "string"
+      label: "Service-account email"
+      help: "The service account's email (client_email in the JSON key), e.g. omadia@my-project.iam.gserviceaccount.com."
+      placeholder: "name@project-id.iam.gserviceaccount.com"
+      required: true
+    - key: "gw_sa_private_key"
+      type: "secret"
+      label: "Service-account private key"
+      help: "The private_key from the service-account JSON key — the full PEM block (-----BEGIN PRIVATE KEY----- … -----END PRIVATE KEY-----). Stored encrypted in the vault and shown only once. Maps to GW_SA_PRIVATE_KEY."
+      required: true
+    - key: "gw_subject_default"
+      type: "string"
+      label: "Default user"
+      help: "Workspace user the integration impersonates when a tool call omits an explicit user, e.g. an assistant mailbox. Must exist in your Workspace domain."
+      placeholder: "assistant@your-domain.com"
+      required: true
+    - key: "gw_admin_subject"
+      type: "string"
+      label: "Admin user"
+      help: "Super-admin email used for Admin Directory lookups. Optional — falls back to the default user (which then also needs the admin.directory scope)."
+      placeholder: "admin@your-domain.com"
+      required: false
+    - key: "gw_surfaces"
+      type: "string"
+      label: "Surfaces"
+      help: "Comma-separated areas to enable: calendar, gmail, drive, directory, people. Omit for all. Tools and requested scopes are scoped to this list."
+      placeholder: "calendar,gmail,drive,directory,people"
+      required: false
+      default: "calendar,gmail,drive,directory,people"
+    - key: "gw_delegated_scopes"
+      type: "string"
+      label: "Delegated scopes (override)"
+      help: "Advanced: comma/space-separated OAuth scope list to request instead of the surface-derived defaults. Must match what you authorise in the Admin console. Leave empty to use the defaults."
+      required: false
+    - key: "gw_token_url"
+      type: "string"
+      label: "Token endpoint (override)"
+      help: "Advanced: OAuth2 token endpoint. Defaults to https://oauth2.googleapis.com/token."
+      required: false
+      default: "https://oauth2.googleapis.com/token"
+    - key: "gw_max_bytes"
+      type: "string"
+      label: "Max response size (bytes)"
+      help: "Caps a single API response to prevent memory blow-ups on large reads. Default 1048576 (1 MiB)."
+      required: false
+      default: "1048576"
+    - key: "gw_cache_ttl_seconds"
+      type: "string"
+      label: "Read cache TTL (seconds)"
+      help: "How long identical read queries are cached in-process. Writes always bypass + clear the cache. Default 60."
+      required: false
+      default: "60"
+    - key: "enable_writes"
+      type: "boolean"
+      label: "Enable writes"
+      help: "When ON, also registers the calendar + gmail write tools (create/update event, send/draft mail). Requires the matching write scopes to be authorised. Default OFF (read-only)."
+      required: false
+      default: false
+
+  self_test: false
+
+# ---------------------------------------------------------------------------
+# Playbook — guidance the orchestrator weaves in when this integration is live.
+# ---------------------------------------------------------------------------
+playbook:
+  when_to_use: |
+    Use for questions and actions across a customer's Google Workspace. Every
+    tool impersonates a user — pass `user` (an email) to act for someone
+    specific, otherwise the configured default user is used. Tool selection:
+      - Calendar: `gw_calendar_freebusy` for "when is X free" / finding common
+        slots; `gw_calendar_list_events` to list/search events in a window
+        (RFC3339 times). Creating/changing events needs writes
+        (`gw_calendar_create_event` / `gw_calendar_update_event`) and explicit
+        user confirmation.
+      - Gmail: `gw_gmail_search` with Gmail query syntax (`from:`, `subject:`,
+        `newer_than:7d`, `is:unread`, `has:attachment`) to find messages, then
+        `gw_gmail_get_message` for content. Sending (`gw_gmail_send`) / drafting
+        (`gw_gmail_draft`) needs writes and confirmation.
+      - Drive/Docs/Sheets: `gw_drive_search` (Drive query syntax) to find files;
+        `gw_drive_get_file` for metadata; `gw_doc_read` for a Doc's text;
+        `gw_sheet_read` for a Sheets range (A1 notation).
+      - Directory/People: `gw_directory_users` to resolve a colleague's name →
+        primary email before scheduling/mailing; `gw_people_search` for a
+        user's personal contacts.
+    When the user is vague about which person, resolve them first
+    (`gw_directory_users` / `gw_people_search`) and present candidates.
+
+# ---------------------------------------------------------------------------
+# Permissions. The private key lives in the vault (ctx.secrets). All egress is
+# via ctx.http (manifest-enforced). Google API hosts split by surface; the
+# token endpoint is oauth2.googleapis.com.
+# ---------------------------------------------------------------------------
+permissions:
+  memory:
+    reads: []
+    writes: []
+  graph:
+    reads: []
+    writes: []
+  network:
+    outbound:
+      - "oauth2.googleapis.com"     # OAuth2 token endpoint (JWT-bearer)
+      - "www.googleapis.com"        # Calendar v3 + Drive v3
+      - "gmail.googleapis.com"      # Gmail v1
+      - "docs.googleapis.com"       # Docs v1
+      - "sheets.googleapis.com"     # Sheets v4
+      - "admin.googleapis.com"      # Admin SDK Directory v1
+      - "people.googleapis.com"     # People v1
+  filesystem:
+    scratch: false
+
+# ---------------------------------------------------------------------------
+# Integrations — descriptive surface for the operator permissions summary.
+# ---------------------------------------------------------------------------
+integrations:
+  - id: "google_oauth_token"
+    kind: "http"
+    target: "Google OAuth2 token endpoint (oauth2.googleapis.com, JWT-bearer / domain-wide delegation)"
+    auth_from: "gw_sa_private_key"
+    docs: "https://developers.google.com/identity/protocols/oauth2/service-account"
+  - id: "google_workspace_apis"
+    kind: "http"
+    target: "Google Workspace REST APIs (Calendar, Gmail, Drive, Docs, Sheets, Admin Directory, People)"
+    auth_from: "gw_sa_private_key"
+    docs: "https://developers.google.com/workspace"
+
+# Capability contracts (versioned) — none required/provided. The plugin-scoped
+# 'googleworkspace.client' + 'googleworkspace.cache' services are published
+# programmatically via ctx.services.provide and resolved by name.
+provides: []

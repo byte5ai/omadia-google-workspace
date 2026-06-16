@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Google Workspace integration">
+  <rect width="256" height="256" rx="56" fill="#ffffff" />
+  <rect x="20" y="20" width="216" height="216" rx="40" fill="#f1f3f4" />
+  <path fill="#4285f4" d="M128 64a64 64 0 0 1 64 64h-40a24 24 0 0 0-24-24z" />
+  <path fill="#ea4335" d="M128 64v40a24 24 0 0 0-24 24H64a64 64 0 0 1 64-64z" />
+  <path fill="#fbbc04" d="M64 128h40a24 24 0 0 0 24 24v40a64 64 0 0 1-64-64z" />
+  <path fill="#34a853" d="M192 128a64 64 0 0 1-64 64v-40a24 24 0 0 0 24-24z" />
+  <circle cx="128" cy="128" r="14" fill="#ffffff" />
+</svg>

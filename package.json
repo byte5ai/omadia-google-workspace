@@ -1,0 +1,33 @@
+{
+  "name": "@omadia/integration-google-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "description": "Google Workspace integration for omadia — a service-account (domain-wide-delegation) JWT-bearer client that lets agents read Calendar, Gmail, Drive/Docs/Sheets and the Directory/People surfaces. Publishes the 'googleworkspace.client' + 'googleworkspace.cache' services and contributes read-only tools (gw_calendar_list_events, gw_calendar_freebusy, gw_gmail_search, gw_gmail_get_message, gw_drive_search, gw_drive_get_file, gw_doc_read, gw_sheet_read, gw_directory_users, gw_people_search) plus opt-in writes (gw_calendar_create_event, gw_calendar_update_event, gw_gmail_send, gw_gmail_draft).",
+  "license": "MIT",
+  "homepage": "https://github.com/byte5ai/omadia-google-workspace",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/byte5ai/omadia-google-workspace.git"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs",
+    "build": "node scripts/build-zip.mjs",
+    "publish:hub": "node scripts/publish.mjs",
+    "clean": "rm -rf dist out .test-build"
+  },
+  "peerDependencies": {
+    "@omadia/plugin-api": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
