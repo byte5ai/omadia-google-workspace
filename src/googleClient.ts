@@ -493,6 +493,37 @@ export class GoogleWorkspaceClient {
     });
   }
 
+  /** Read a spreadsheet's tab metadata (title + per-tab sheetId/title/index). READ. */
+  async getSpreadsheetMeta(
+    subject: string,
+    spreadsheetId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.request('sheets', 'GET', `/spreadsheets/${encodeURIComponent(spreadsheetId)}`, {
+      subject,
+      query: {
+        fields:
+          'properties(title),sheets(properties(sheetId,title,index,gridProperties(rowCount,columnCount)))',
+      },
+    });
+  }
+
+  /**
+   * Run a Sheets `spreadsheets.batchUpdate` (e.g. `addSheet`, `duplicateSheet`).
+   * WRITE. Returns the raw reply so callers can read back e.g. the new sheetId.
+   */
+  async batchUpdateSpreadsheet(
+    subject: string,
+    spreadsheetId: string,
+    requests: unknown[],
+  ): Promise<Record<string, unknown>> {
+    return this.request(
+      'sheets',
+      'POST',
+      `/spreadsheets/${encodeURIComponent(spreadsheetId)}:batchUpdate`,
+      { subject, body: { requests } },
+    );
+  }
+
   // =========================================================================
   // Admin Directory v1 / People v1
   // =========================================================================

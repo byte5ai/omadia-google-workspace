@@ -363,6 +363,237 @@ export function createDriveCreateHandler(deps: ToolDeps): NativeToolHandler {
 }
 
 // ---------------------------------------------------------------------------
+// gw_sheet_list_tabs (read)
+// ---------------------------------------------------------------------------
+export const sheetListTabsSpec: NativeToolSpec = {
+  name: 'gw_sheet_list_tabs',
+  description:
+    'List the tabs (sheets) of a Google Spreadsheet: title, sheetId, index and size. READ-ONLY. Use this to check whether a tab already exists, or to get a tab\'s sheetId before duplicating it.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      user: { type: 'string', description: 'Owner to impersonate (email). Omit for default.' },
+      spreadsheetId: { type: 'string', description: 'Google Sheets id (required).' },
+    },
+    required: ['spreadsheetId'],
+  },
+};
+
+export const SHEET_LIST_TABS_PROMPT_DOC =
+  '\n- `gw_sheet_list_tabs`: READ-ONLY — list a spreadsheet\'s tabs (title, sheetId, index). Use it to check if a tab exists and to get the `sheetId` needed by `gw_sheet_duplicate_tab`.\n';
+
+export function createSheetListTabsHandler(deps: ToolDeps): NativeToolHandler {
+  return async (raw: unknown): Promise<string> => {
+    const input = (raw ?? {}) as Record<string, unknown>;
+    try {
+      const subject = resolveSubject(deps, input.user);
+      const spreadsheetId = str(input.spreadsheetId);
+      if (!spreadsheetId) throw new GoogleInputError('"spreadsheetId" is required.');
+      const key = `sheets:tabs:${subject}:${spreadsheetId}`;
+      const meta = await deps.cache.getOrSet(key, () =>
+        deps.client.getSpreadsheetMeta(subject, spreadsheetId),
+      );
+      const props = (meta.properties as { title?: string }) ?? {};
+      const tabs = ((meta.sheets as Record<string, unknown>[]) ?? []).map((s) => {
+        const p = (s.properties as Record<string, unknown>) ?? {};
+        const grid = (p.gridProperties as Record<string, unknown>) ?? {};
+        return {
+          sheetId: p.sheetId,
+          title: p.title,
+          index: p.index,
+          rows: grid.rowCount,
+          columns: grid.columnCount,
+        };
+      });
+      return JSON.stringify({ spreadsheetId, title: props.title, tabs }, null, 2);
+    } catch (err) {
+      return formatToolError(err);
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// gw_sheet_add_tab (write)
+// ---------------------------------------------------------------------------
+export const sheetAddTabSpec: NativeToolSpec = {
+  name: 'gw_sheet_add_tab',
+  description:
+    'Add a new, EMPTY tab (sheet) to a Google Spreadsheet. WRITE — confirm with the user first. Creates a blank tab with no formatting; to keep an existing tab\'s formatting/formulas use gw_sheet_duplicate_tab instead. Returns the new sheetId.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      user: { type: 'string', description: 'Owner to impersonate (email). Omit for default.' },
+      spreadsheetId: { type: 'string', description: 'Google Sheets id (required).' },
+      title: { type: 'string', description: 'Title of the new tab (required).' },
+      index: { type: 'number', description: 'Optional 0-based position among the tabs.' },
+    },
+    required: ['spreadsheetId', 'title'],
+  },
+};
+
+export const SHEET_ADD_TAB_PROMPT_DOC =
+  '\n- `gw_sheet_add_tab`: WRITE — add a new EMPTY tab to a spreadsheet (no formatting). For a formatted copy of an existing tab use `gw_sheet_duplicate_tab`. Confirm with the user first.\n';
+
+export function createSheetAddTabHandler(deps: ToolDeps): NativeToolHandler {
+  return async (raw: unknown): Promise<string> => {
+    const input = (raw ?? {}) as Record<string, unknown>;
+    try {
+      const subject = resolveSubject(deps, input.user);
+      const spreadsheetId = str(input.spreadsheetId);
+      const title = str(input.title);
+      if (!spreadsheetId) throw new GoogleInputError('"spreadsheetId" is required.');
+      if (!title) throw new GoogleInputError('"title" is required.');
+      const properties: Record<string, unknown> = { title };
+      if (typeof input.index === 'number') properties.index = input.index;
+      const result = await deps.client.batchUpdateSpreadsheet(subject, spreadsheetId, [
+        { addSheet: { properties } },
+      ]);
+      deps.cache.clear();
+      const replies = (result.replies as Record<string, unknown>[]) ?? [];
+      const added = (replies[0]?.addSheet as { properties?: Record<string, unknown> })?.properties;
+      return JSON.stringify(
+        { added: true, title, sheetId: added?.sheetId, index: added?.index },
+        null,
+        2,
+      );
+    } catch (err) {
+      return formatToolError(err);
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// gw_sheet_duplicate_tab (write)
+// ---------------------------------------------------------------------------
+export const sheetDuplicateTabSpec: NativeToolSpec = {
+  name: 'gw_sheet_duplicate_tab',
+  description:
+    'Duplicate an existing tab within a Google Spreadsheet, keeping ALL formatting, formulas, number formats and conditional formatting. WRITE — confirm first. Identify the source by sourceTitle or sourceSheetId; the copy gets newName. Then use gw_sheet_write to overwrite just the values. Returns the new sheetId.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      user: { type: 'string', description: 'Owner to impersonate (email). Omit for default.' },
+      spreadsheetId: { type: 'string', description: 'Google Sheets id (required).' },
+      sourceTitle: { type: 'string', description: 'Title of the tab to copy (or use sourceSheetId).' },
+      sourceSheetId: { type: 'number', description: 'sheetId of the tab to copy (from gw_sheet_list_tabs).' },
+      newName: { type: 'string', description: 'Name of the duplicated tab (required).' },
+      index: { type: 'number', description: 'Optional 0-based insert position for the copy.' },
+    },
+    required: ['spreadsheetId', 'newName'],
+  },
+};
+
+export const SHEET_DUPLICATE_TAB_PROMPT_DOC =
+  '\n- `gw_sheet_duplicate_tab`: WRITE — duplicate a tab WITH all formatting + formulas (the right way to make e.g. a new year\'s sheet from a template). Give `sourceTitle` or `sourceSheetId` + `newName`, then overwrite values with `gw_sheet_write`. Confirm first.\n';
+
+export function createSheetDuplicateTabHandler(deps: ToolDeps): NativeToolHandler {
+  return async (raw: unknown): Promise<string> => {
+    const input = (raw ?? {}) as Record<string, unknown>;
+    try {
+      const subject = resolveSubject(deps, input.user);
+      const spreadsheetId = str(input.spreadsheetId);
+      const newName = str(input.newName);
+      if (!spreadsheetId) throw new GoogleInputError('"spreadsheetId" is required.');
+      if (!newName) throw new GoogleInputError('"newName" is required.');
+
+      let sourceSheetId =
+        typeof input.sourceSheetId === 'number' ? input.sourceSheetId : undefined;
+      const sourceTitle = str(input.sourceTitle);
+      if (sourceSheetId === undefined) {
+        if (!sourceTitle) {
+          throw new GoogleInputError('provide "sourceTitle" or "sourceSheetId" of the tab to copy.');
+        }
+        const meta = await deps.client.getSpreadsheetMeta(subject, spreadsheetId);
+        const match = ((meta.sheets as Record<string, unknown>[]) ?? []).find((s) => {
+          const p = (s.properties as Record<string, unknown>) ?? {};
+          return p.title === sourceTitle;
+        });
+        const props = (match?.properties as Record<string, unknown>) ?? {};
+        if (typeof props.sheetId !== 'number') {
+          throw new GoogleInputError(`no tab named "${sourceTitle}" found in this spreadsheet.`);
+        }
+        sourceSheetId = props.sheetId;
+      }
+
+      const dup: Record<string, unknown> = { sourceSheetId, newSheetName: newName };
+      if (typeof input.index === 'number') dup.insertSheetIndex = input.index;
+      const result = await deps.client.batchUpdateSpreadsheet(subject, spreadsheetId, [
+        { duplicateSheet: dup },
+      ]);
+      deps.cache.clear();
+      const replies = (result.replies as Record<string, unknown>[]) ?? [];
+      const added = (replies[0]?.duplicateSheet as { properties?: Record<string, unknown> })
+        ?.properties;
+      return JSON.stringify(
+        { duplicated: true, sourceSheetId, newName, newSheetId: added?.sheetId },
+        null,
+        2,
+      );
+    } catch (err) {
+      return formatToolError(err);
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// gw_sheet_batch_update (write) — full formatting/formula/structural surface
+// ---------------------------------------------------------------------------
+export const sheetBatchUpdateSpec: NativeToolSpec = {
+  name: 'gw_sheet_batch_update',
+  description:
+    'Advanced raw Google Sheets spreadsheets.batchUpdate. WRITE — confirm first. This is the COMPLETE Sheets write surface for formatting and structure that gw_sheet_write (values only) cannot do: number/currency/percent formats, bold/italic/colors/borders (repeatCell, updateCells), conditional formatting (addConditionalFormatRule), column widths (updateDimensionProperties), merges (mergeCells), and formulas (userEnteredValue.formulaValue). Pass the raw "requests" array exactly as the Sheets API expects. Powerful: it can also delete or restructure, so use deliberately. Get a tab\'s sheetId from gw_sheet_list_tabs for the GridRange.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      user: { type: 'string', description: 'Owner to impersonate (email). Omit for default.' },
+      spreadsheetId: { type: 'string', description: 'Google Sheets id (required).' },
+      requests: {
+        type: 'array',
+        items: { type: 'object' },
+        description:
+          'Raw Sheets API batchUpdate request objects. Examples: bold+€-format a range → [{"repeatCell":{"range":{"sheetId":0,"startRowIndex":0,"endRowIndex":1},"cell":{"userEnteredFormat":{"textFormat":{"bold":true},"numberFormat":{"type":"CURRENCY","pattern":"#,##0.00 €"}}},"fields":"userEnteredFormat(textFormat,numberFormat)"}}]; set a column width → [{"updateDimensionProperties":{"range":{"sheetId":0,"dimension":"COLUMNS","startIndex":0,"endIndex":1},"properties":{"pixelSize":160},"fields":"pixelSize"}}]. Required, non-empty.',
+      },
+    },
+    required: ['spreadsheetId', 'requests'],
+  },
+};
+
+export const SHEET_BATCH_UPDATE_PROMPT_DOC =
+  '\n- `gw_sheet_batch_update`: WRITE — raw Google Sheets `batchUpdate` for the FULL formatting/structure surface (number formats, bold/colors/borders via `repeatCell`, conditional formatting, column widths, merges, formulas). Use for anything `gw_sheet_write` (values only) cannot do. Get `sheetId` from `gw_sheet_list_tabs`. Confirm with the user; it can also delete/restructure.\n';
+
+export function createSheetBatchUpdateHandler(deps: ToolDeps): NativeToolHandler {
+  return async (raw: unknown): Promise<string> => {
+    const input = (raw ?? {}) as Record<string, unknown>;
+    try {
+      const subject = resolveSubject(deps, input.user);
+      const spreadsheetId = str(input.spreadsheetId);
+      if (!spreadsheetId) throw new GoogleInputError('"spreadsheetId" is required.');
+      if (!Array.isArray(input.requests) || input.requests.length === 0) {
+        throw new GoogleInputError('"requests" must be a non-empty array of Sheets API requests.');
+      }
+      const result = await deps.client.batchUpdateSpreadsheet(
+        subject,
+        spreadsheetId,
+        input.requests as unknown[],
+      );
+      deps.cache.clear();
+      return JSON.stringify(
+        {
+          applied: true,
+          spreadsheetId,
+          requestCount: (input.requests as unknown[]).length,
+          replies: result.replies ?? [],
+        },
+        null,
+        2,
+      );
+    } catch (err) {
+      return formatToolError(err);
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Helpers — flatten a Docs document into plain text.
 // ---------------------------------------------------------------------------
 interface DocsTextRun {

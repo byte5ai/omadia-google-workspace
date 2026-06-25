@@ -76,6 +76,18 @@ import {
   driveCreateSpec,
   DRIVE_CREATE_PROMPT_DOC,
   createDriveCreateHandler,
+  sheetListTabsSpec,
+  SHEET_LIST_TABS_PROMPT_DOC,
+  createSheetListTabsHandler,
+  sheetAddTabSpec,
+  SHEET_ADD_TAB_PROMPT_DOC,
+  createSheetAddTabHandler,
+  sheetDuplicateTabSpec,
+  SHEET_DUPLICATE_TAB_PROMPT_DOC,
+  createSheetDuplicateTabHandler,
+  sheetBatchUpdateSpec,
+  SHEET_BATCH_UPDATE_PROMPT_DOC,
+  createSheetBatchUpdateHandler,
 } from './driveTools.js';
 import {
   directoryUsersSpec,
@@ -194,11 +206,27 @@ export async function activate(ctx: PluginContext): Promise<GoogleWorkspacePlugi
     reg(driveGetFileSpec, createDriveGetFileHandler(deps), DRIVE_GET_FILE_PROMPT_DOC);
     reg(docReadSpec, createDocReadHandler(deps), DOC_READ_PROMPT_DOC);
     reg(sheetReadSpec, createSheetReadHandler(deps), SHEET_READ_PROMPT_DOC);
-    contributed.push('gw_drive_search', 'gw_drive_get_file', 'gw_doc_read', 'gw_sheet_read');
+    reg(sheetListTabsSpec, createSheetListTabsHandler(deps), SHEET_LIST_TABS_PROMPT_DOC);
+    contributed.push(
+      'gw_drive_search',
+      'gw_drive_get_file',
+      'gw_doc_read',
+      'gw_sheet_read',
+      'gw_sheet_list_tabs',
+    );
     if (enableWrites) {
       reg(sheetWriteSpec, createSheetWriteHandler(deps), SHEET_WRITE_PROMPT_DOC);
       reg(driveCreateSpec, createDriveCreateHandler(deps), DRIVE_CREATE_PROMPT_DOC);
-      contributed.push('gw_sheet_write', 'gw_drive_create');
+      reg(sheetAddTabSpec, createSheetAddTabHandler(deps), SHEET_ADD_TAB_PROMPT_DOC);
+      reg(sheetDuplicateTabSpec, createSheetDuplicateTabHandler(deps), SHEET_DUPLICATE_TAB_PROMPT_DOC);
+      reg(sheetBatchUpdateSpec, createSheetBatchUpdateHandler(deps), SHEET_BATCH_UPDATE_PROMPT_DOC);
+      contributed.push(
+        'gw_sheet_write',
+        'gw_drive_create',
+        'gw_sheet_add_tab',
+        'gw_sheet_duplicate_tab',
+        'gw_sheet_batch_update',
+      );
     }
   }
 

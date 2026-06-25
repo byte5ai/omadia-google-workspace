@@ -17,7 +17,7 @@ identity:
   kind: "integration"
   domain: "googleworkspace"
   name: "Google Workspace"
-  version: "0.2.1"                              # === package.json "version"
+  version: "0.3.0"                              # === package.json "version"
   description: "Google Workspace connector for omadia. Service-account (domain-wide-delegation) JWT-bearer client (read-mostly). Publishes the 'googleworkspace.client' + 'googleworkspace.cache' services and contributes read-only tools for Calendar, Gmail, Drive/Docs/Sheets and Directory/People — plus opt-in calendar/gmail writes."
   authors:
     - name: "byte5 GmbH"
@@ -290,7 +290,7 @@ setup:
     - key: "enable_writes"
       type: "boolean"
       label: "Enable writes"
-      help: "When ON, also registers the write tools: calendar (create/update event), gmail (send/draft mail), sheets (gw_sheet_write) and drive (gw_drive_create). Requires the matching write scopes to be authorised. Default OFF (read-only)."
+      help: "When ON, also registers the write tools: calendar (create/update event), gmail (send/draft mail), sheets (gw_sheet_write values, gw_sheet_add_tab, gw_sheet_duplicate_tab, and gw_sheet_batch_update for full formatting/formulas) and drive (gw_drive_create). Requires the matching write scopes to be authorised. Default OFF (read-only)."
       required: false
       default: false
 

@@ -69,6 +69,7 @@ for a specific person, or omit it to use the default user.
 | `gw_drive_get_file` | Drive | File metadata by id. |
 | `gw_doc_read` | Docs | A Google Doc's text content, flattened. |
 | `gw_sheet_read` | Sheets | Values from a Sheets range (A1 notation). |
+| `gw_sheet_list_tabs` | Sheets | List a spreadsheet's tabs (title, sheetId, index). |
 | `gw_directory_users` | Directory | Search Workspace users to resolve a name to an email. |
 | `gw_people_search` | People | Search a user's personal contacts. |
 
@@ -86,8 +87,11 @@ registered, and the matching write scopes must be authorised:
 | `gw_calendar_update_event` | Partial-update an event. |
 | `gw_gmail_send` | Send a plain-text email as the user. |
 | `gw_gmail_draft` | Create a draft without sending. |
-| `gw_sheet_write` | Write a 2D value array into a Sheets range (overwrite or append). |
+| `gw_sheet_write` | Write a 2D value array into a Sheets range (overwrite or append). Formulas work via `valueInputOption: USER_ENTERED`. |
 | `gw_drive_create` | Create a Drive folder or file (optional parent folder and text content). |
+| `gw_sheet_add_tab` | Add a new empty tab to a spreadsheet. |
+| `gw_sheet_duplicate_tab` | Duplicate a tab with all formatting + formulas, then overwrite values with `gw_sheet_write`. |
+| `gw_sheet_batch_update` | Raw Sheets `batchUpdate`: full formatting (number formats, colors, borders), conditional formatting, column widths, merges, formulas. |
 
 Deletes are never exposed to the assistant.
 
