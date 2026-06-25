@@ -45,8 +45,24 @@ const WRITE_SCOPES: Partial<Record<Surface, readonly string[]>> = {
   ],
   drive: [
     'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/documents',
     'https://www.googleapis.com/auth/spreadsheets',
   ],
+};
+
+/**
+ * A full read-write scope makes its `.readonly` counterpart redundant. We must
+ * NOT request both: Google's domain-wide delegation matches scopes as a literal
+ * string set (a broad scope does not implicitly authorise the narrow one), so
+ * requesting an un-authorised `.readonly` variant alongside the full scope
+ * fails the WHOLE token request. When the full scope is in the set, drop the
+ * narrow one so the request matches a sensibly-configured delegation entry.
+ */
+const SUPERSEDES: Record<string, string> = {
+  'https://www.googleapis.com/auth/drive': 'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/documents': 'https://www.googleapis.com/auth/documents.readonly',
+  'https://www.googleapis.com/auth/spreadsheets':
+    'https://www.googleapis.com/auth/spreadsheets.readonly',
 };
 
 /**
@@ -64,6 +80,12 @@ export function assembleScopes(
     if (enableWrites) {
       for (const scope of WRITE_SCOPES[s] ?? []) out.add(scope);
     }
+  }
+  // Drop any `.readonly` scope superseded by a full scope present in the set,
+  // so the requested set matches a delegation entry that lists only the full
+  // scope (DWD does literal scope-set matching).
+  for (const [full, readonly] of Object.entries(SUPERSEDES)) {
+    if (out.has(full)) out.delete(readonly);
   }
   return [...out].sort();
 }

@@ -17,7 +17,7 @@ identity:
   kind: "integration"
   domain: "googleworkspace"
   name: "Google Workspace"
-  version: "0.2.0"                              # === package.json "version"
+  version: "0.2.1"                              # === package.json "version"
   description: "Google Workspace connector for omadia. Service-account (domain-wide-delegation) JWT-bearer client (read-mostly). Publishes the 'googleworkspace.client' + 'googleworkspace.cache' services and contributes read-only tools for Calendar, Gmail, Drive/Docs/Sheets and Directory/People — plus opt-in calendar/gmail writes."
   authors:
     - name: "byte5 GmbH"
@@ -103,12 +103,17 @@ setup:
          https://www.googleapis.com/auth/contacts.readonly,
          https://www.googleapis.com/auth/directory.readonly
          ```
-         With **Enable writes** on, also authorise
+         With **Enable writes** on, the requested set changes: add
          `https://www.googleapis.com/auth/calendar.events`,
          `https://www.googleapis.com/auth/gmail.send`,
-         `https://www.googleapis.com/auth/gmail.compose`,
-         `https://www.googleapis.com/auth/drive` and
-         `https://www.googleapis.com/auth/spreadsheets`.
+         `https://www.googleapis.com/auth/gmail.compose`, and the FULL
+         `https://www.googleapis.com/auth/drive`,
+         `https://www.googleapis.com/auth/documents` and
+         `https://www.googleapis.com/auth/spreadsheets`. The full Drive, Docs
+         and Sheets scopes REPLACE their `.readonly` variants above (do not list
+         both: domain-wide delegation matches scopes literally, so an
+         un-authorised `.readonly` left in the request fails the whole token).
+         The plugin logs the exact set at activation; authorise that verbatim.
       4. **Authorise**. Delegation can take a few minutes to propagate.
 
       ### 3. Fill in the fields below
@@ -184,12 +189,18 @@ setup:
          https://www.googleapis.com/auth/contacts.readonly,
          https://www.googleapis.com/auth/directory.readonly
          ```
-         Mit **Schreiben aktivieren** zusätzlich
+         Mit **Schreiben aktivieren** ändert sich die angefragte Liste:
          `https://www.googleapis.com/auth/calendar.events`,
          `https://www.googleapis.com/auth/gmail.send`,
-         `https://www.googleapis.com/auth/gmail.compose`,
-         `https://www.googleapis.com/auth/drive` und
-         `https://www.googleapis.com/auth/spreadsheets` autorisieren.
+         `https://www.googleapis.com/auth/gmail.compose` sowie die VOLLEN
+         `https://www.googleapis.com/auth/drive`,
+         `https://www.googleapis.com/auth/documents` und
+         `https://www.googleapis.com/auth/spreadsheets` autorisieren. Die vollen
+         Drive-, Docs- und Sheets-Scopes ERSETZEN ihre `.readonly`-Varianten von
+         oben (nicht beide eintragen: die domänenweite Delegierung matcht Scopes
+         literal, ein nicht autorisierter `.readonly` im Request kippt den
+         ganzen Token). Das Plugin loggt die exakte Liste bei Aktivierung;
+         genau diese autorisieren.
       4. **Autorisieren**. Die Delegierung braucht ggf. einige Minuten.
 
       ### 3. Felder unten ausfüllen
