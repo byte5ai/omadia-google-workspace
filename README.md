@@ -50,7 +50,7 @@ src/
 ├── toolDeps.ts        # shared deps + subject (impersonation) resolution
 ├── calendarTools.ts   # gw_calendar_list_events, gw_calendar_freebusy (+ create/update events)
 ├── gmailTools.ts      # gw_gmail_search, gw_gmail_get_message (+ send/draft)
-├── driveTools.ts      # gw_drive_search, gw_drive_get_file, gw_doc_read, gw_sheet_read
+├── driveTools.ts      # gw_drive_search, gw_drive_get_file, gw_doc_read, gw_sheet_read (+ gw_sheet_write, gw_drive_create)
 └── directoryTools.ts  # gw_directory_users, gw_people_search
 ```
 
@@ -86,6 +86,8 @@ registered, and the matching write scopes must be authorised:
 | `gw_calendar_update_event` | Partial-update an event. |
 | `gw_gmail_send` | Send a plain-text email as the user. |
 | `gw_gmail_draft` | Create a draft without sending. |
+| `gw_sheet_write` | Write a 2D value array into a Sheets range (overwrite or append). |
+| `gw_drive_create` | Create a Drive folder or file (optional parent folder and text content). |
 
 Deletes are never exposed to the assistant.
 

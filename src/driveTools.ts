@@ -214,6 +214,155 @@ export function createSheetReadHandler(deps: ToolDeps): NativeToolHandler {
 }
 
 // ---------------------------------------------------------------------------
+// gw_sheet_write (write)
+// ---------------------------------------------------------------------------
+export const sheetWriteSpec: NativeToolSpec = {
+  name: 'gw_sheet_write',
+  description:
+    'Write cell values into a Google Sheets range (A1 notation). WRITE — only call after the user confirms the target sheet, range and data. mode "overwrite" (default) replaces the range; mode "append" adds rows after the existing table. Values are a 2D array (rows of cells).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      user: { type: 'string', description: 'Owner to impersonate (email). Omit for default.' },
+      spreadsheetId: { type: 'string', description: 'Google Sheets id (required).' },
+      range: {
+        type: 'string',
+        description: 'A1 range, e.g. "Sheet1!A1:C3" (overwrite) or "Sheet1!A1" (append anchor). Required.',
+      },
+      values: {
+        type: 'array',
+        items: { type: 'array', items: {} },
+        description: 'Rows of cell values, e.g. [["Name","Total"],["Acme",42]]. Required.',
+      },
+      mode: {
+        type: 'string',
+        description: '"overwrite" (default, replaces the range) or "append" (adds rows after the table).',
+      },
+      valueInputOption: {
+        type: 'string',
+        description: '"USER_ENTERED" (default, parses formulas/dates) or "RAW" (store literally).',
+      },
+    },
+    required: ['spreadsheetId', 'range', 'values'],
+  },
+};
+
+export const SHEET_WRITE_PROMPT_DOC =
+  '\n- `gw_sheet_write`: WRITE — write a 2D `values` array into a Google Sheets `range` (A1). `mode:"overwrite"` replaces the range, `mode:"append"` adds rows after the table. Confirm the target with the user first.\n';
+
+export function createSheetWriteHandler(deps: ToolDeps): NativeToolHandler {
+  return async (raw: unknown): Promise<string> => {
+    const input = (raw ?? {}) as Record<string, unknown>;
+    try {
+      const subject = resolveSubject(deps, input.user);
+      const spreadsheetId = str(input.spreadsheetId);
+      const range = str(input.range);
+      if (!spreadsheetId) throw new GoogleInputError('"spreadsheetId" is required.');
+      if (!range) throw new GoogleInputError('"range" (A1 notation) is required.');
+      if (!Array.isArray(input.values) || !input.values.every((r) => Array.isArray(r))) {
+        throw new GoogleInputError('"values" must be a 2D array (rows of cells).');
+      }
+      const mode = str(input.mode) === 'append' ? 'append' : 'overwrite';
+      const valueInputOption = str(input.valueInputOption) === 'RAW' ? 'RAW' : 'USER_ENTERED';
+      const result = await deps.client.writeSheetValues(
+        subject,
+        spreadsheetId,
+        range,
+        input.values as unknown[][],
+        { mode, valueInputOption },
+      );
+      deps.cache.clear();
+      // `update` returns updated* at the top level; `append` nests them under `updates`.
+      const updates = (result.updates as Record<string, unknown>) ?? result;
+      return JSON.stringify(
+        {
+          written: true,
+          mode,
+          spreadsheetId,
+          updatedRange: updates.updatedRange,
+          updatedRows: updates.updatedRows,
+          updatedCells: updates.updatedCells,
+        },
+        null,
+        2,
+      );
+    } catch (err) {
+      return formatToolError(err);
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// gw_drive_create (write)
+// ---------------------------------------------------------------------------
+const DRIVE_TYPE_MIME: Record<string, string> = {
+  folder: 'application/vnd.google-apps.folder',
+  document: 'application/vnd.google-apps.document',
+  spreadsheet: 'application/vnd.google-apps.spreadsheet',
+  presentation: 'application/vnd.google-apps.presentation',
+  file: 'text/plain',
+};
+
+export const driveCreateSpec: NativeToolSpec = {
+  name: 'gw_drive_create',
+  description:
+    'Create a Google Drive item. WRITE — only call after the user confirms. "type": folder | document | spreadsheet | presentation | file (default folder). Optional "parentId" places it in a folder, "content" fills a text/document body, "mimeType" overrides the type. Returns the new item id + link.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      user: { type: 'string', description: 'Owner to impersonate (email). Omit for default.' },
+      name: { type: 'string', description: 'Name/title of the new item (required).' },
+      type: {
+        type: 'string',
+        description: 'folder | document | spreadsheet | presentation | file. Default folder.',
+      },
+      parentId: { type: 'string', description: 'Id of the parent folder. Omit for the drive root.' },
+      content: {
+        type: 'string',
+        description: 'Optional text content. For "file" it becomes the body; for "document" it is imported as the doc text.',
+      },
+      mimeType: { type: 'string', description: 'Advanced: explicit MIME type, overrides "type".' },
+    },
+    required: ['name'],
+  },
+};
+
+export const DRIVE_CREATE_PROMPT_DOC =
+  '\n- `gw_drive_create`: WRITE — create a Drive item by `name` and `type` (folder | document | spreadsheet | presentation | file). Optional `parentId` (folder) and `content` (text body / doc import). Confirm with the user first.\n';
+
+export function createDriveCreateHandler(deps: ToolDeps): NativeToolHandler {
+  return async (raw: unknown): Promise<string> => {
+    const input = (raw ?? {}) as Record<string, unknown>;
+    try {
+      const subject = resolveSubject(deps, input.user);
+      const name = str(input.name);
+      if (!name) throw new GoogleInputError('"name" is required.');
+      const type = (str(input.type) ?? 'folder').toLowerCase();
+      const mimeType = str(input.mimeType) ?? DRIVE_TYPE_MIME[type];
+      if (!mimeType) {
+        throw new GoogleInputError(
+          `unknown "type": ${type}. Use folder | document | spreadsheet | presentation | file, or pass "mimeType".`,
+        );
+      }
+      const content = typeof input.content === 'string' ? input.content : undefined;
+      if (content !== undefined && type === 'folder') {
+        throw new GoogleInputError('a folder cannot have "content".');
+      }
+      const parents = str(input.parentId) ? [str(input.parentId) as string] : undefined;
+      const file = await deps.client.createDriveFile(subject, { name, mimeType, parents, content });
+      deps.cache.clear();
+      return JSON.stringify(
+        { created: true, id: file.id, name: file.name, mimeType: file.mimeType, webViewLink: file.webViewLink },
+        null,
+        2,
+      );
+    } catch (err) {
+      return formatToolError(err);
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Helpers — flatten a Docs document into plain text.
 // ---------------------------------------------------------------------------
 interface DocsTextRun {

@@ -70,6 +70,12 @@ import {
   sheetReadSpec,
   SHEET_READ_PROMPT_DOC,
   createSheetReadHandler,
+  sheetWriteSpec,
+  SHEET_WRITE_PROMPT_DOC,
+  createSheetWriteHandler,
+  driveCreateSpec,
+  DRIVE_CREATE_PROMPT_DOC,
+  createDriveCreateHandler,
 } from './driveTools.js';
 import {
   directoryUsersSpec,
@@ -189,6 +195,11 @@ export async function activate(ctx: PluginContext): Promise<GoogleWorkspacePlugi
     reg(docReadSpec, createDocReadHandler(deps), DOC_READ_PROMPT_DOC);
     reg(sheetReadSpec, createSheetReadHandler(deps), SHEET_READ_PROMPT_DOC);
     contributed.push('gw_drive_search', 'gw_drive_get_file', 'gw_doc_read', 'gw_sheet_read');
+    if (enableWrites) {
+      reg(sheetWriteSpec, createSheetWriteHandler(deps), SHEET_WRITE_PROMPT_DOC);
+      reg(driveCreateSpec, createDriveCreateHandler(deps), DRIVE_CREATE_PROMPT_DOC);
+      contributed.push('gw_sheet_write', 'gw_drive_create');
+    }
   }
 
   // --- Directory / People -------------------------------------------------

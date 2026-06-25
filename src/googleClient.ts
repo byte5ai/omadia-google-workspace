@@ -74,7 +74,14 @@ export interface RequestOptions {
   /** Workspace user to impersonate (DWD `sub`). */
   readonly subject: string;
   readonly query?: Record<string, QueryValue>;
+  /** JSON request body (serialized + sent as application/json). */
   readonly body?: unknown;
+  /**
+   * Pre-serialized body sent verbatim with `contentType` (e.g. a multipart
+   * upload). Takes precedence over `body`. Used by the Drive media upload.
+   */
+  readonly rawBody?: string;
+  readonly contentType?: string;
 }
 
 export class GoogleWorkspaceClient {
@@ -113,7 +120,10 @@ export class GoogleWorkspaceClient {
     path: string,
     opts: RequestOptions,
   ): Promise<T> {
-    const url = `${API_BASE[api]}${path}${buildQueryString(opts.query)}`;
+    // An absolute `path` (e.g. the Drive media-upload host) is used verbatim;
+    // otherwise it is resolved against the per-API base.
+    const base = path.startsWith('http') ? path : `${API_BASE[api]}${path}`;
+    const url = `${base}${buildQueryString(opts.query)}`;
     const send = async (): Promise<Response> => {
       const token = await this.auth.getToken(opts.subject, this.scopes);
       const headers: Record<string, string> = {
@@ -121,7 +131,10 @@ export class GoogleWorkspaceClient {
         Accept: 'application/json',
       };
       let serialized: string | undefined;
-      if (opts.body !== undefined) {
+      if (opts.rawBody !== undefined) {
+        if (opts.contentType) headers['Content-Type'] = opts.contentType;
+        serialized = opts.rawBody;
+      } else if (opts.body !== undefined) {
         headers['Content-Type'] = 'application/json; charset=utf-8';
         serialized = JSON.stringify(opts.body);
       }
@@ -398,6 +411,86 @@ export class GoogleWorkspaceClient {
       `/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`,
       { subject },
     );
+  }
+
+  /**
+   * Write values into a Sheets range. `mode: 'overwrite'` (default) PUTs the
+   * range (`values.update`); `mode: 'append'` appends rows after the table
+   * (`values.append` with `INSERT_ROWS`). `valueInputOption` controls whether
+   * inputs are parsed (`USER_ENTERED`) or stored as-is (`RAW`).
+   */
+  async writeSheetValues(
+    subject: string,
+    spreadsheetId: string,
+    range: string,
+    values: unknown[][],
+    p: { mode?: 'overwrite' | 'append'; valueInputOption?: string } = {},
+  ): Promise<Record<string, unknown>> {
+    const valueInputOption = p.valueInputOption ?? 'USER_ENTERED';
+    const encoded = `/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`;
+    const body = { range, majorDimension: 'ROWS', values };
+    if (p.mode === 'append') {
+      return this.request('sheets', 'POST', `${encoded}:append`, {
+        subject,
+        query: { valueInputOption, insertDataOption: 'INSERT_ROWS' },
+        body,
+      });
+    }
+    return this.request('sheets', 'PUT', encoded, {
+      subject,
+      query: { valueInputOption },
+      body,
+    });
+  }
+
+  /**
+   * Create a Drive file or folder. Metadata-only (no `content`) is a plain
+   * `files.create` (folders, empty native Google files). With `content`, a
+   * multipart media upload is used so the bytes land in the new file (text
+   * content; native Google types are converted from it).
+   */
+  async createDriveFile(
+    subject: string,
+    p: {
+      name: string;
+      mimeType: string;
+      parents?: readonly string[];
+      content?: string;
+      contentMimeType?: string;
+    },
+  ): Promise<Record<string, unknown>> {
+    const metadata: Record<string, unknown> = { name: p.name, mimeType: p.mimeType };
+    if (p.parents && p.parents.length > 0) metadata.parents = p.parents;
+    const fields = 'id,name,mimeType,webViewLink,parents';
+
+    if (p.content === undefined) {
+      return this.request('drive', 'POST', '/files', {
+        subject,
+        query: { supportsAllDrives: true, fields },
+        body: metadata,
+      });
+    }
+
+    // Multipart media upload: metadata part + media part.
+    const boundary = `omadia-gw-${Math.random().toString(36).slice(2)}`;
+    const rawBody = [
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      JSON.stringify(metadata),
+      `--${boundary}`,
+      `Content-Type: ${p.contentMimeType ?? 'text/plain'}; charset=UTF-8`,
+      '',
+      p.content,
+      `--${boundary}--`,
+      '',
+    ].join('\r\n');
+    return this.request('drive', 'POST', 'https://www.googleapis.com/upload/drive/v3/files', {
+      subject,
+      query: { uploadType: 'multipart', supportsAllDrives: true, fields },
+      rawBody,
+      contentType: `multipart/related; boundary=${boundary}`,
+    });
   }
 
   // =========================================================================

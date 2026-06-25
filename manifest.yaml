@@ -17,7 +17,7 @@ identity:
   kind: "integration"
   domain: "googleworkspace"
   name: "Google Workspace"
-  version: "0.1.0"                              # === package.json "version"
+  version: "0.2.0"                              # === package.json "version"
   description: "Google Workspace connector for omadia. Service-account (domain-wide-delegation) JWT-bearer client (read-mostly). Publishes the 'googleworkspace.client' + 'googleworkspace.cache' services and contributes read-only tools for Calendar, Gmail, Drive/Docs/Sheets and Directory/People — plus opt-in calendar/gmail writes."
   authors:
     - name: "byte5 GmbH"
@@ -105,8 +105,10 @@ setup:
          ```
          With **Enable writes** on, also authorise
          `https://www.googleapis.com/auth/calendar.events`,
-         `https://www.googleapis.com/auth/gmail.send` and
-         `https://www.googleapis.com/auth/gmail.compose`.
+         `https://www.googleapis.com/auth/gmail.send`,
+         `https://www.googleapis.com/auth/gmail.compose`,
+         `https://www.googleapis.com/auth/drive` and
+         `https://www.googleapis.com/auth/spreadsheets`.
       4. **Authorise**. Delegation can take a few minutes to propagate.
 
       ### 3. Fill in the fields below
@@ -184,8 +186,10 @@ setup:
          ```
          Mit **Schreiben aktivieren** zusätzlich
          `https://www.googleapis.com/auth/calendar.events`,
-         `https://www.googleapis.com/auth/gmail.send` und
-         `https://www.googleapis.com/auth/gmail.compose` autorisieren.
+         `https://www.googleapis.com/auth/gmail.send`,
+         `https://www.googleapis.com/auth/gmail.compose`,
+         `https://www.googleapis.com/auth/drive` und
+         `https://www.googleapis.com/auth/spreadsheets` autorisieren.
       4. **Autorisieren**. Die Delegierung braucht ggf. einige Minuten.
 
       ### 3. Felder unten ausfüllen
@@ -275,7 +279,7 @@ setup:
     - key: "enable_writes"
       type: "boolean"
       label: "Enable writes"
-      help: "When ON, also registers the calendar + gmail write tools (create/update event, send/draft mail). Requires the matching write scopes to be authorised. Default OFF (read-only)."
+      help: "When ON, also registers the write tools: calendar (create/update event), gmail (send/draft mail), sheets (gw_sheet_write) and drive (gw_drive_create). Requires the matching write scopes to be authorised. Default OFF (read-only)."
       required: false
       default: false
 
