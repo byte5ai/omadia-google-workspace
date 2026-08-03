@@ -267,7 +267,7 @@ setup:
       help: "Workspace user the integration impersonates when a tool call omits an explicit user, e.g. an assistant mailbox. Must exist in your Workspace domain. This IS a normal person's address, unlike the service-account email above."
       placeholder: "assistant@your-domain.com"
       required: true
-      pattern: '^[^@\s]+@[^@\s]+\.[A-Za-z][A-Za-z]+$'
+      pattern: '^[^@\s]+@[^@\s]+\.[A-Za-z]{2,63}$'
       pattern_hint:
         en: "Expected an email address of a real user in your Workspace domain, e.g. `assistant@your-domain.com`."
         de: "Erwartet wird die E-Mail-Adresse eines echten Nutzers in deiner Workspace-Domain, z. B. `assistant@deine-domain.de`."
@@ -277,7 +277,7 @@ setup:
       help: "Super-admin email used for Admin Directory lookups. Optional — falls back to the default user (which then also needs the admin.directory scope)."
       placeholder: "admin@your-domain.com"
       required: false
-      pattern: '^[^@\s]+@[^@\s]+\.[A-Za-z][A-Za-z]+$'
+      pattern: '^[^@\s]+@[^@\s]+\.[A-Za-z]{2,63}$'
       pattern_hint:
         en: "Expected the email address of a Workspace super-admin, e.g. `admin@your-domain.com`. Leave empty to fall back to the default user."
         de: "Erwartet wird die E-Mail-Adresse eines Workspace-Super-Admins, z. B. `admin@deine-domain.de`. Leer lassen, um den Standard-Nutzer zu verwenden."
