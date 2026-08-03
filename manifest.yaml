@@ -17,7 +17,7 @@ identity:
   kind: "integration"
   domain: "googleworkspace"
   name: "Google Workspace"
-  version: "0.3.0"                              # === package.json "version"
+  version: "0.3.1"                              # === package.json "version"
   description: "Google Workspace connector for omadia. Service-account (domain-wide-delegation) JWT-bearer client (read-mostly). Publishes the 'googleworkspace.client' + 'googleworkspace.cache' services and contributes read-only tools for Calendar, Gmail, Drive/Docs/Sheets and Directory/People — plus opt-in calendar/gmail writes."
   authors:
     - name: "byte5 GmbH"
