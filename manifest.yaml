@@ -234,29 +234,53 @@ setup:
       > aktivieren** nur einschalten, wenn der Assistent Termine anlegen oder
       > Mails senden soll.
   fields:
+    # OM-17 — a tester typed their real work email and their real Google account
+    # password into the two fields below, because a masked input directly under
+    # an email input is the visual pattern of a login. Nothing objected; the UI
+    # confirmed "gespeichert". The `pattern` checks here are what make that
+    # mistake impossible to save silently, and `pattern_hint` is what tells the
+    # operator what the field actually wants. Never remove them without a
+    # replacement.
     - key: "gw_sa_client_email"
       type: "string"
       label: "Service-account email"
-      help: "The service account's email (client_email in the JSON key), e.g. omadia@my-project.iam.gserviceaccount.com."
+      help: "The service account's email (client_email in the JSON key), e.g. omadia@my-project.iam.gserviceaccount.com. This is NOT your own Google address — a service account is a technical identity you create in Google Cloud."
       placeholder: "name@project-id.iam.gserviceaccount.com"
       required: true
+      pattern: '^[^@\s]+@[^@\s]+\.iam\.gserviceaccount\.com$'
+      pattern_hint:
+        en: "That is not a service-account address. Expected `…@….iam.gserviceaccount.com` — copy `client_email` out of the JSON key file, not your own Google address."
+        de: "Das ist keine Dienstkonto-Adresse. Erwartet wird `…@….iam.gserviceaccount.com` — übernimm `client_email` aus der JSON-Schlüsseldatei, nicht deine eigene Google-Adresse."
     - key: "gw_sa_private_key"
       type: "secret"
       label: "Service-account private key"
-      help: "The private_key from the service-account JSON key — the full PEM block (-----BEGIN PRIVATE KEY----- … -----END PRIVATE KEY-----). Stored encrypted in the vault and shown only once. Maps to GW_SA_PRIVATE_KEY."
+      help: "The private_key from the service-account JSON key — the full PEM block (-----BEGIN PRIVATE KEY----- … -----END PRIVATE KEY-----). This is NOT your Google account password. Stored encrypted in the vault and shown only once. Maps to GW_SA_PRIVATE_KEY."
+      placeholder: "-----BEGIN PRIVATE KEY-----\\n…"
       required: true
+      pattern: '^-----BEGIN [A-Z ]*PRIVATE KEY-----'
+      pattern_hint:
+        en: "Expected a PEM block starting with `-----BEGIN PRIVATE KEY-----`. Copy the whole `private_key` value out of the service-account JSON key file. No account password belongs here."
+        de: "Erwartet wird ein PEM-Block, beginnend mit `-----BEGIN PRIVATE KEY-----`. Übernimm den kompletten Wert von `private_key` aus der JSON-Schlüsseldatei des Dienstkontos. Hier gehört kein Konto-Passwort hinein."
     - key: "gw_subject_default"
       type: "string"
       label: "Default user"
-      help: "Workspace user the integration impersonates when a tool call omits an explicit user, e.g. an assistant mailbox. Must exist in your Workspace domain."
+      help: "Workspace user the integration impersonates when a tool call omits an explicit user, e.g. an assistant mailbox. Must exist in your Workspace domain. This IS a normal person's address, unlike the service-account email above."
       placeholder: "assistant@your-domain.com"
       required: true
+      pattern: '^[^@\s]+@[^@\s]+\.[A-Za-z]{2,63}$'
+      pattern_hint:
+        en: "Expected an email address of a real user in your Workspace domain, e.g. `assistant@your-domain.com`."
+        de: "Erwartet wird die E-Mail-Adresse eines echten Nutzers in deiner Workspace-Domain, z. B. `assistant@deine-domain.de`."
     - key: "gw_admin_subject"
       type: "string"
       label: "Admin user"
       help: "Super-admin email used for Admin Directory lookups. Optional — falls back to the default user (which then also needs the admin.directory scope)."
       placeholder: "admin@your-domain.com"
       required: false
+      pattern: '^[^@\s]+@[^@\s]+\.[A-Za-z]{2,63}$'
+      pattern_hint:
+        en: "Expected the email address of a Workspace super-admin, e.g. `admin@your-domain.com`. Leave empty to fall back to the default user."
+        de: "Erwartet wird die E-Mail-Adresse eines Workspace-Super-Admins, z. B. `admin@deine-domain.de`. Leer lassen, um den Standard-Nutzer zu verwenden."
     - key: "gw_surfaces"
       type: "string"
       label: "Surfaces"
