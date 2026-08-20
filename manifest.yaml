@@ -17,8 +17,13 @@ identity:
   kind: "integration"
   domain: "googleworkspace"
   name: "Google Workspace"
-  version: "0.4.0"                              # === package.json "version"
-  description: "Google Workspace connector for omadia. Service-account (domain-wide-delegation) JWT-bearer client (read-mostly). Publishes the 'googleworkspace.client' + 'googleworkspace.cache' services and contributes read-only tools for Calendar, Gmail, Drive/Docs/Sheets and Directory/People — plus opt-in calendar/gmail writes."
+  version: "0.4.1"                              # === package.json "version"
+  # OM-28/OM-06 (#602 P4) — benefit-first, localized. The service-contract
+  # detail the old one-paragraph description led with now lives in the store
+  # detail page's collapsed "For developers" section and the setup guide.
+  description:
+    en: "Connects omadia to your company's Google Workspace: the assistant reads calendars, mail, files and the directory — and, if you allow it, creates events and sends mail. Runs on a technical service account your IT sets up once; no personal login involved."
+    de: "Verbindet omadia mit dem Google Workspace deines Unternehmens: Der Assistent liest Kalender, Mails, Dateien und das Verzeichnis — und legt auf Wunsch Termine an oder versendet Mails. Läuft über ein technisches Dienstkonto, das die IT einmalig einrichtet; keine persönliche Anmeldung nötig."
   authors:
     - name: "byte5 GmbH"
       email: "info@omadia.ai"
