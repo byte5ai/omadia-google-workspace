@@ -253,14 +253,33 @@ export async function activate(ctx: PluginContext): Promise<GoogleWorkspacePlugi
   if (!ctx.smokeMode) {
     void client
       .probe(defaultSubject)
-      .then(() => ctx.log(`[googleworkspace] connected (impersonating ${defaultSubject})`))
-      .catch((err: unknown) =>
+      .then(() => {
+        ctx.log(`[googleworkspace] connected (impersonating ${defaultSubject})`);
+        // Field-test follow-up (OM-16/24/33): the probe verdict used to live
+        // only in this log line, so the store card said "Aktiv" for
+        // credentials that could never authenticate. `ok` WITH a title is the
+        // kernel's renderable "connection verified" signal (plugin-api 1.4.0);
+        // the kernel stamps `checked_at`, so the card shows when the check
+        // ran. On an older kernel this normalizes to clear() — harmless.
+        // German copy on purpose: the product's operator surface is
+        // German-first and status titles are plain strings, not locale maps.
+        ctx.status.report({
+          state: 'ok',
+          title: 'Verbunden',
+          detail: `Google-Token für ${defaultSubject} erfolgreich ausgestellt.`,
+        });
+      })
+      .catch((err: unknown) => {
+        const detail = err instanceof Error ? err.message : String(err);
         ctx.log(
-          `[googleworkspace] WARNING: initial token probe failed — ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        ),
-      );
+          `[googleworkspace] WARNING: initial token probe failed — ${detail}`,
+        );
+        ctx.status.report({
+          state: 'error',
+          title: 'Verbindung fehlgeschlagen',
+          detail: `Token-Probe für ${defaultSubject}: ${detail}`.slice(0, 300),
+        });
+      });
   }
 
   return {
