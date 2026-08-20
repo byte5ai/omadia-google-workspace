@@ -17,7 +17,7 @@ identity:
   kind: "integration"
   domain: "googleworkspace"
   name: "Google Workspace"
-  version: "0.3.1"                              # === package.json "version"
+  version: "0.4.0"                              # === package.json "version"
   description: "Google Workspace connector for omadia. Service-account (domain-wide-delegation) JWT-bearer client (read-mostly). Publishes the 'googleworkspace.client' + 'googleworkspace.cache' services and contributes read-only tools for Calendar, Gmail, Drive/Docs/Sheets and Directory/People — plus opt-in calendar/gmail writes."
   authors:
     - name: "byte5 GmbH"
@@ -36,6 +36,19 @@ compat:
   node: ">=20"
 
 depends_on: []
+
+# ---------------------------------------------------------------------------
+# Store-card presentation (OM-15 / #602) — shown BEFORE install, so nobody
+# discovers halfway through setup that they need an admin account they
+# don't have. `requirement` is the card's prerequisites line.
+# ---------------------------------------------------------------------------
+listing:
+  setup_profile:
+    audience: "it_admin"
+    estimated_minutes: 20
+    requirement:
+      en: "Requires a Google Workspace account with admin access and a Google Cloud service account with domain-wide delegation."
+      de: "Braucht ein Google-Workspace-Konto mit Admin-Zugang und ein Google-Cloud-Dienstkonto mit domänenweiter Delegierung."
 
 lifecycle:
   entry: "dist/index.js"                        # exports `activate(ctx)` → GoogleWorkspacePluginHandle
@@ -241,10 +254,35 @@ setup:
     # mistake impossible to save silently, and `pattern_hint` is what tells the
     # operator what the field actually wants. Never remove them without a
     # replacement.
+    # #603 (OM-17) — the upload path. One file picker instead of transcribing
+    # two values out of a JSON file into a login-shaped form. The platform
+    # explodes the upload server-side into the two fields below (`extracts`),
+    # verifies it is actually a service-account key first (`expect`), and never
+    # stores the raw document. The two fields below stay declared: they remain
+    # the stored values, the manual fallback, and the post-install edit surface.
+    - key: "gw_sa_key_file"
+      type: "json_file"
+      label:
+        en: "Service-account key file (JSON)"
+        de: "Dienstkonto-Schlüsseldatei (JSON)"
+      help:
+        en: "Upload the JSON key file downloaded from the Google Cloud Console (service account → keys → add key). The service-account email and private key below are filled from it automatically — no copying needed. The file itself is not stored."
+        de: "Lade die JSON-Schlüsseldatei hoch, die du in der Google Cloud Console heruntergeladen hast (Dienstkonto → Schlüssel → Schlüssel hinzufügen). Dienstkonto-E-Mail und privater Schlüssel unten werden automatisch daraus übernommen — nichts abtippen. Die Datei selbst wird nicht gespeichert."
+      required: false
+      accept: ".json,application/json"
+      expect:
+        type: "service_account"
+      extracts:
+        gw_sa_client_email: "$.client_email"
+        gw_sa_private_key: "$.private_key"
     - key: "gw_sa_client_email"
       type: "string"
-      label: "Service-account email"
-      help: "The service account's email (client_email in the JSON key), e.g. omadia@my-project.iam.gserviceaccount.com. This is NOT your own Google address — a service account is a technical identity you create in Google Cloud."
+      label:
+        en: "Service-account email"
+        de: "Dienstkonto-E-Mail"
+      help:
+        en: "The service account's email (client_email in the JSON key), e.g. omadia@my-project.iam.gserviceaccount.com. This is NOT your own Google address — a service account is a technical identity you create in Google Cloud."
+        de: "Die E-Mail-Adresse des Dienstkontos (client_email in der JSON-Schlüsseldatei), z. B. omadia@mein-projekt.iam.gserviceaccount.com. Das ist NICHT deine eigene Google-Adresse — ein Dienstkonto ist eine technische Identität aus der Google Cloud Console."
       placeholder: "name@project-id.iam.gserviceaccount.com"
       required: true
       pattern: '^[^@\s]+@[^@\s]+\.iam\.gserviceaccount\.com$'
@@ -253,8 +291,12 @@ setup:
         de: "Das ist keine Dienstkonto-Adresse. Erwartet wird `…@….iam.gserviceaccount.com` — übernimm `client_email` aus der JSON-Schlüsseldatei, nicht deine eigene Google-Adresse."
     - key: "gw_sa_private_key"
       type: "secret"
-      label: "Service-account private key"
-      help: "The private_key from the service-account JSON key — the full PEM block (-----BEGIN PRIVATE KEY----- … -----END PRIVATE KEY-----). This is NOT your Google account password. Stored encrypted in the vault and shown only once. Maps to GW_SA_PRIVATE_KEY."
+      label:
+        en: "Service-account private key"
+        de: "Privater Schlüssel des Dienstkontos"
+      help:
+        en: "The private_key from the service-account JSON key — the full PEM block (-----BEGIN PRIVATE KEY----- … -----END PRIVATE KEY-----). This is NOT your Google account password. Stored encrypted in the vault and shown only once. Maps to GW_SA_PRIVATE_KEY."
+        de: "Der private_key aus der JSON-Schlüsseldatei — der komplette PEM-Block (-----BEGIN PRIVATE KEY----- … -----END PRIVATE KEY-----). Das ist NICHT dein Google-Passwort. Wird verschlüsselt im Vault gespeichert und nur einmal angezeigt."
       placeholder: "-----BEGIN PRIVATE KEY-----\\n…"
       required: true
       pattern: '^-----BEGIN [A-Z ]*PRIVATE KEY-----'
@@ -263,8 +305,12 @@ setup:
         de: "Erwartet wird ein PEM-Block, beginnend mit `-----BEGIN PRIVATE KEY-----`. Übernimm den kompletten Wert von `private_key` aus der JSON-Schlüsseldatei des Dienstkontos. Hier gehört kein Konto-Passwort hinein."
     - key: "gw_subject_default"
       type: "string"
-      label: "Default user"
-      help: "Workspace user the integration impersonates when a tool call omits an explicit user, e.g. an assistant mailbox. Must exist in your Workspace domain. This IS a normal person's address, unlike the service-account email above."
+      label:
+        en: "Default user"
+        de: "Standard-Nutzer"
+      help:
+        en: "Workspace user the integration impersonates when a tool call omits an explicit user, e.g. an assistant mailbox. Must exist in your Workspace domain. This IS a normal person's address, unlike the service-account email above."
+        de: "Workspace-Nutzer, in dessen Namen die Integration agiert, wenn ein Tool-Aufruf keinen expliziten Nutzer nennt — z. B. ein Assistenz-Postfach. Muss in deiner Workspace-Domain existieren. Das IST eine normale Personen-Adresse, anders als die Dienstkonto-E-Mail oben."
       placeholder: "assistant@your-domain.com"
       required: true
       pattern: '^[^@\s]+@[^@\s]+\.[A-Za-z]{2,63}$'
@@ -273,8 +319,12 @@ setup:
         de: "Erwartet wird die E-Mail-Adresse eines echten Nutzers in deiner Workspace-Domain, z. B. `assistant@deine-domain.de`."
     - key: "gw_admin_subject"
       type: "string"
-      label: "Admin user"
-      help: "Super-admin email used for Admin Directory lookups. Optional — falls back to the default user (which then also needs the admin.directory scope)."
+      label:
+        en: "Admin user"
+        de: "Admin-Nutzer"
+      help:
+        en: "Super-admin email used for Admin Directory lookups. Optional — falls back to the default user (which then also needs the admin.directory scope)."
+        de: "Super-Admin-Adresse für Admin-Directory-Abfragen. Optional — fällt auf den Standard-Nutzer zurück (der dann auch den admin.directory-Scope braucht)."
       placeholder: "admin@your-domain.com"
       required: false
       pattern: '^[^@\s]+@[^@\s]+\.[A-Za-z]{2,63}$'
@@ -283,38 +333,62 @@ setup:
         de: "Erwartet wird die E-Mail-Adresse eines Workspace-Super-Admins, z. B. `admin@deine-domain.de`. Leer lassen, um den Standard-Nutzer zu verwenden."
     - key: "gw_surfaces"
       type: "string"
-      label: "Surfaces"
-      help: "Comma-separated areas to enable: calendar, gmail, drive, directory, people. Omit for all. Tools and requested scopes are scoped to this list."
+      label:
+        en: "Surfaces"
+        de: "Bereiche"
+      help:
+        en: "Comma-separated areas to enable: calendar, gmail, drive, directory, people. Omit for all. Tools and requested scopes are scoped to this list."
+        de: "Komma-getrennte Bereiche: calendar, gmail, drive, directory, people. Leer lassen für alle. Tools und angefragte Scopes richten sich nach dieser Liste."
       placeholder: "calendar,gmail,drive,directory,people"
       required: false
       default: "calendar,gmail,drive,directory,people"
     - key: "gw_delegated_scopes"
       type: "string"
-      label: "Delegated scopes (override)"
-      help: "Advanced: comma/space-separated OAuth scope list to request instead of the surface-derived defaults. Must match what you authorise in the Admin console. Leave empty to use the defaults."
+      label:
+        en: "Delegated scopes (override)"
+        de: "Delegierte Scopes (Override)"
+      help:
+        en: "Advanced: comma/space-separated OAuth scope list to request instead of the surface-derived defaults. Must match what you authorise in the Admin console. Leave empty to use the defaults."
+        de: "Für Fortgeschrittene: OAuth-Scope-Liste (Komma oder Leerzeichen), die statt der abgeleiteten Standardwerte angefragt wird. Muss zur Freigabe in der Admin-Konsole passen. Leer lassen für die Standardwerte."
       required: false
     - key: "gw_token_url"
       type: "string"
-      label: "Token endpoint (override)"
-      help: "Advanced: OAuth2 token endpoint. Defaults to https://oauth2.googleapis.com/token."
+      label:
+        en: "Token endpoint (override)"
+        de: "Token-Endpunkt (Override)"
+      help:
+        en: "Advanced: OAuth2 token endpoint. Defaults to https://oauth2.googleapis.com/token."
+        de: "Für Fortgeschrittene: OAuth2-Token-Endpunkt. Standard: https://oauth2.googleapis.com/token."
       required: false
       default: "https://oauth2.googleapis.com/token"
     - key: "gw_max_bytes"
       type: "string"
-      label: "Max response size (bytes)"
-      help: "Caps a single API response to prevent memory blow-ups on large reads. Default 1048576 (1 MiB)."
+      label:
+        en: "Max response size (bytes)"
+        de: "Maximale Antwortgröße (Bytes)"
+      help:
+        en: "Caps a single API response to prevent memory blow-ups on large reads. Default 1048576 (1 MiB)."
+        de: "Begrenzt eine einzelne API-Antwort, um Speicherspitzen bei großen Lesezugriffen zu vermeiden. Standard 1048576 (1 MiB)."
       required: false
       default: "1048576"
     - key: "gw_cache_ttl_seconds"
       type: "string"
-      label: "Read cache TTL (seconds)"
-      help: "How long identical read queries are cached in-process. Writes always bypass + clear the cache. Default 60."
+      label:
+        en: "Read cache TTL (seconds)"
+        de: "Lese-Cache-Dauer (Sekunden)"
+      help:
+        en: "How long identical read queries are cached in-process. Writes always bypass + clear the cache. Default 60."
+        de: "Wie lange identische Lese-Abfragen im Prozess zwischengespeichert werden. Schreibzugriffe umgehen und leeren den Cache immer. Standard 60."
       required: false
       default: "60"
     - key: "enable_writes"
       type: "boolean"
-      label: "Enable writes"
-      help: "When ON, also registers the write tools: calendar (create/update event), gmail (send/draft mail), sheets (gw_sheet_write values, gw_sheet_add_tab, gw_sheet_duplicate_tab, and gw_sheet_batch_update for full formatting/formulas) and drive (gw_drive_create). Requires the matching write scopes to be authorised. Default OFF (read-only)."
+      label:
+        en: "Enable writes"
+        de: "Schreibzugriff aktivieren"
+      help:
+        en: "When ON, also registers the write tools: calendar (create/update event), gmail (send/draft mail), sheets (gw_sheet_write values, gw_sheet_add_tab, gw_sheet_duplicate_tab, and gw_sheet_batch_update for full formatting/formulas) and drive (gw_drive_create). Requires the matching write scopes to be authorised. Default OFF (read-only)."
+        de: "Wenn AN, werden zusätzlich die Schreib-Tools registriert: Kalender (Termin anlegen/ändern), Gmail (Mail senden/entwerfen), Sheets (Werte schreiben, Tabs anlegen/duplizieren, Batch-Formatierung) und Drive (Datei anlegen). Braucht die passenden Schreib-Scopes in der Freigabe. Standard AUS (nur lesen)."
       required: false
       default: false
 
