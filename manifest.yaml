@@ -37,7 +37,7 @@ identity:
     - "productivity"
 
 compat:
-  core: ">=1.75.0 <2.0"
+  core: ">=1.76.0 <2.0"
   node: ">=20"
 
 depends_on: []
